@@ -1,5 +1,5 @@
 import { QQIDBase } from './QQIDBase';
-import { Entity, OneToMany } from 'typeorm';
+import { Column, Entity, OneToMany } from 'typeorm';
 import { GroupTemplate } from './GroupTemplate';
 
 @Entity()

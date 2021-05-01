@@ -1,5 +1,8 @@
 import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { User } from './entities/User';
+import { Group } from './entities/Group';
+import { DefaultTemplate } from './entities/DefaultTemplate';
+import { GroupTemplate } from './entities/GroupTemplate';
 
 export function dbConfig() {
   return {
@@ -14,8 +17,19 @@ export function typeormConfig(): TypeOrmModuleOptions {
   return {
     name: 'app',
     type: 'mysql',
-    entities: [User], // entities here
+    entities: [User, Group, DefaultTemplate, GroupTemplate], // entities here
     synchronize: true,
     ...dbConfig(),
+  };
+}
+export interface DiceConfig {
+  maxDiceCount: number;
+  maxDiceSize: number;
+}
+
+export function diceConfig(): DiceConfig {
+  return {
+    maxDiceCount: parseInt(process.env.DICE_MAX_COUNT) || 1000,
+    maxDiceSize: parseInt(process.env.DICE_MAX_SIZE) || 1000,
   };
 }

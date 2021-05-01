@@ -19,7 +19,12 @@ export class BotService {
     const repo = this.db.getRepository(User);
     let ent = await repo.findOne({ where: { id } });
     if (ent) {
-      return ent;
+      if (!ent.name && name) {
+        ent.name = name;
+        return await repo.save(ent);
+      } else {
+        return ent;
+      }
     }
     ent = new User();
     ent.id = id;

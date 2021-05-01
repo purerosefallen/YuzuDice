@@ -3,7 +3,7 @@ import { TextTemplate } from './TextTemplate';
 import { Group } from './Group';
 
 @Entity()
-export class GroupTemplate extends TextTemplate {
+export class DefaultTemplate extends TextTemplate {
   @PrimaryColumn('varchar', { length: 32 })
   key: string;
 }
