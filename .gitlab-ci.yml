@@ -1,0 +1,64 @@
+stages:
+  - build
+  - combine
+  - deploy
+
+variables:
+  GIT_DEPTH: "1"
+  CONTAINER_TEST_IMAGE: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
+  CONTAINER_TEST_ARM_IMAGE: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG-arm
+  CONTAINER_TEST_X86_IMAGE: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG-x86
+  CONTAINER_RELEASE_IMAGE: $CI_REGISTRY_IMAGE:latest
+
+before_script:
+  - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+
+build-x86:
+  stage: build
+  tags: 
+    - docker
+  script:
+    - docker build --pull -t $CONTAINER_TEST_X86_IMAGE .
+    - docker push $CONTAINER_TEST_X86_IMAGE
+
+build-arm:
+  stage: build
+  tags: 
+    - docker-arm
+  script:
+    - docker build --pull -t $CONTAINER_TEST_ARM_IMAGE .
+    - docker push $CONTAINER_TEST_ARM_IMAGE
+
+combine:
+  stage: combine
+  tags:
+    - docker
+  script:
+    - docker pull $CONTAINER_TEST_X86_IMAGE
+    - docker pull $CONTAINER_TEST_ARM_IMAGE
+    - docker manifest create $CONTAINER_TEST_IMAGE --amend $CONTAINER_TEST_X86_IMAGE --amend $CONTAINER_TEST_ARM_IMAGE
+    - docker manifest push $CONTAINER_TEST_IMAGE
+
+deploy_latest:
+  stage: deploy
+  tags: 
+    - docker
+  script:
+    - docker pull $CONTAINER_TEST_IMAGE
+    - docker tag $CONTAINER_TEST_IMAGE $CONTAINER_RELEASE_IMAGE
+    - docker push $CONTAINER_RELEASE_IMAGE
+  only:
+    - master
+
+deploy_tag:
+  stage: deploy
+  tags: 
+    - docker
+  variables:
+    CONTAINER_TAG_IMAGE: $CI_REGISTRY_IMAGE:$CI_COMMIT_TAG
+  script:
+    - docker pull $CONTAINER_TEST_IMAGE
+    - docker tag $CONTAINER_TEST_IMAGE $CONTAINER_TAG_IMAGE
+    - docker push $CONTAINER_TAG_IMAGE
+  only:
+    - tags
