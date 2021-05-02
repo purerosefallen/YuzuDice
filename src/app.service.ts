@@ -26,10 +26,12 @@ export interface CommonResult {
   reason?: string;
   result?: number;
 }
-
-export interface RollResult extends CommonResult {
+export interface DiceParam {
   count: number;
   size: number;
+}
+
+export interface RollResult extends CommonResult, DiceParam {
   formula?: string;
   results?: number[];
 }
@@ -194,6 +196,27 @@ export class AppService {
       }
     }
     return { user, group, profile, banReason: null };
+  }
+
+  parseDiceParam(param: string): DiceParam {
+    if (!param) {
+      return null;
+    }
+    let match = param.match(/^d?(\d+)$/);
+    if (match) {
+      return {
+        size: parseInt(match[1]),
+        count: 1,
+      };
+    }
+    match = param.match(/^(\d+)d(\d+)$/);
+    if (match) {
+      return {
+        size: parseInt(match[2]),
+        count: parseInt(match[1]),
+      };
+    }
+    return null;
   }
 
   async rollDice(

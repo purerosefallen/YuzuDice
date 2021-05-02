@@ -87,14 +87,14 @@ export class BotController {
       await this.appService.banForKicked(session.groupId, session.operatorId);
     });
     globalCtx
-      .command('rolldice', '投掷骰子')
+      .command('rolldice [param:string]', '投掷骰子')
       .option('count', '-c <count:posint> 骰子数量', { fallback: 1 })
       .option('size', '-s <count:posint> 骰子面数', { fallback: 6 })
       .option('reason', '-r <reason:text> 骰子说明')
       .alias('rd', 'roll', 'r')
       .usage('也支持 .rd<size> 和 .r<count>d<size> [reason] 这样的传统语法。')
       .example('.rolldice -c 2 -s 6 -r "行动判定"')
-      .action(async (argv, args) => {
+      .action(async (argv, param) => {
         const session = argv.session;
         const rollResult = {
           name: session.username,
@@ -102,6 +102,7 @@ export class BotController {
           size: 6,
           reason: null,
           ...argv.options,
+          ...this.appService.parseDiceParam(param),
         };
         return await this.appService.rollDice(rollResult, session);
       });
