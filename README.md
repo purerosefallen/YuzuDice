@@ -54,8 +54,8 @@ services:
     environment:
       DB_HOST: mysql
       DB_PORT: 3306
-      DB_USER: yuzudice
       DB_NAME: yuzudice
+      DB_USER: yuzudice
       DB_PASS: db_pass
       CQ_ID: 11111111
       CQ_SERVER: ws://cqhttp
