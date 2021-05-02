@@ -10,6 +10,7 @@ import { AppLogger } from '../app.logger';
 import { BotService } from '../bot/bot.service';
 import { User } from '../entities/User';
 import { HttpServerLogger } from './http-server.logger';
+import { UserPermissions } from '../constants';
 
 @Injectable()
 export class HttpServerService {
@@ -49,7 +50,13 @@ export class HttpServerService {
     }
   }
 
-  async setUser(id: string, name: string, permissions: number) {
+  async setUser(
+    id: string,
+    name: string,
+    permissions: number,
+    addperm: string,
+    removeperm: string,
+  ) {
     try {
       const user = await this.botService.findOrCreateUser(id);
       if (name) {
@@ -63,6 +70,26 @@ export class HttpServerService {
           });
         }
         user.permissions = permissions;
+      }
+      if (addperm) {
+        const value: number = UserPermissions[addperm];
+        if (!value) {
+          throw new BadRequestException({
+            success: false,
+            message: `Permission not found: ${addperm}`,
+          });
+        }
+        user.permissions |= value;
+      }
+      if (removeperm) {
+        const value: number = UserPermissions[removeperm];
+        if (!value) {
+          throw new BadRequestException({
+            success: false,
+            message: `Permission not found: ${removeperm}`,
+          });
+        }
+        user.permissions &= ~value;
       }
       await this.db.getRepository(User).save(user);
     } catch (e) {
