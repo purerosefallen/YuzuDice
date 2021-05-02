@@ -36,6 +36,8 @@ services:
   cqhttp:
     restart: always
     image: git-registry.mycard.moe/nanahira/docker-mirai-cqhttp:novnc
+    ports:
+      - 11180:8080
     volumes:
       - ./cqhttp/data:/usr/src/app/data
       - ./cqhttp/config:/usr/src/app/config
@@ -61,6 +63,8 @@ services:
       DICE_MAX_COUNT: 1000
       DICE_MAX_SIZE: 1000
 ```
+
+登录过程中可能需要划验证码。访问 `http://<服务器IP>:11180/vnc.html` 划即可。
 
 之后使用命令 `curl -H 'Authorization: admin_token' http://<服务器IP>:3000/api/user -d 'id=<你的QQ号> -d 'permissions=0xffffffff'` 赋予自己管理员权限。
 
