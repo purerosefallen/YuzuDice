@@ -18,7 +18,6 @@ import { GroupTemplate } from './entities/GroupTemplate';
 import { DefaultTemplate } from './entities/DefaultTemplate';
 import { defaultTemplateMap } from './DefaultTemplate';
 import Mustache from 'mustache';
-import { doc } from 'prettier';
 import { GroupUserProfile } from './entities/GroupUserProfile';
 
 export interface CommonResult {
