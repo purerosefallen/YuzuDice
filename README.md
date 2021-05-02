@@ -66,7 +66,7 @@ services:
 
 登录过程中可能需要划验证码。访问 `http://<服务器IP>:11180/vnc.html` 划即可。
 
-之后使用命令 `curl -H 'Authorization: admin_token' http://<服务器IP>:3000/api/user -d 'id=<你的QQ号> -d 'permissions=0xffffffff'` 赋予自己管理员权限。
+之后使用命令 `curl -H 'Authorization: admin_token' http://<服务器IP>:3000/api/user -d 'id=<你的QQ号>' -d 'permissions=0xffffffff'` 赋予自己管理员权限。
 
 ## Installation
 
