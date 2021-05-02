@@ -17,9 +17,9 @@ import { TextTemplate } from './entities/TextTemplate';
 import { GroupTemplate } from './entities/GroupTemplate';
 import { DefaultTemplate } from './entities/DefaultTemplate';
 import { defaultTemplateMap } from './DefaultTemplate';
-import Mustache from 'mustache';
 import { GroupUserProfile } from './entities/GroupUserProfile';
 import moment from 'moment';
+import { Utility } from './utility';
 
 export interface CommonResult {
   name: string;
@@ -157,7 +157,7 @@ export class AppService {
     if (template) {
       return template.render(data);
     }
-    return Mustache.render(defaultTemplateMap.get(key), data) || key;
+    return Utility.render(defaultTemplateMap.get(key), data) || key;
   }
 
   async isUserHasPermissions(userId: string, username: string, perm: number) {
