@@ -20,7 +20,4 @@ export class GroupTemplate extends TextTemplate {
 
   @ManyToOne((type) => Group, (group) => group.templates)
   group: Group;
-
-  @RelationId((template: GroupTemplate) => template.group)
-  groupId: string;
 }

@@ -17,7 +17,10 @@ export class BotService {
 
   async findOrCreateUser(id: string, name?: string) {
     const repo = this.db.getRepository(User);
-    let ent = await repo.findOne({ where: { id } });
+    let ent = await repo.findOne({
+      where: { id },
+      relations: ['groupProfiles', 'groupProfiles.group'],
+    });
     if (ent) {
       if (!ent.name && name) {
         ent.name = name;
@@ -39,7 +42,10 @@ export class BotService {
   }
   async findOrCreateGroup(id: string) {
     const repo = this.db.getRepository(Group);
-    let ent = await repo.findOne({ where: { id }, relations: ['templates'] });
+    let ent = await repo.findOne({
+      where: { id },
+      relations: ['templates', 'userProfiles', 'userProfiles.user'],
+    });
     if (ent) {
       return ent;
     }

@@ -5,6 +5,6 @@ export class QQIDBase extends TimeBase {
   @PrimaryColumn('varchar', { length: 12 })
   id: string;
 
-  @Column('tinyint', { default: 0 })
-  isBanned: number;
+  @Column('varchar', { nullable: true, length: 100 })
+  banReason: string;
 }

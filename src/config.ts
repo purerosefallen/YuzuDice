@@ -3,6 +3,7 @@ import { User } from './entities/User';
 import { Group } from './entities/Group';
 import { DefaultTemplate } from './entities/DefaultTemplate';
 import { GroupTemplate } from './entities/GroupTemplate';
+import { GroupUserProfile } from './entities/GroupUserProfile';
 
 export function dbConfig() {
   return {
@@ -17,7 +18,7 @@ export function typeormConfig(): TypeOrmModuleOptions {
   return {
     name: 'app',
     type: 'mysql',
-    entities: [User, Group, DefaultTemplate, GroupTemplate], // entities here
+    entities: [User, Group, DefaultTemplate, GroupTemplate, GroupUserProfile], // entities here
     synchronize: true,
     ...dbConfig(),
   };

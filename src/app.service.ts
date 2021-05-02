@@ -5,9 +5,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { AppLogger } from './app.logger';
-import { Connection } from 'typeorm';
+import { Brackets, Connection, In } from 'typeorm';
 import { InjectConnection } from '@nestjs/typeorm';
 import { User } from './entities/User';
+import { Group } from './entities/Group';
 import { BotService } from './bot/bot.service';
 import { UserPermissions } from './constants';
 import { diceConfig, DiceConfig } from './config';
@@ -17,6 +18,8 @@ import { GroupTemplate } from './entities/GroupTemplate';
 import { DefaultTemplate } from './entities/DefaultTemplate';
 import { defaultTemplateMap } from './DefaultTemplate';
 import Mustache from 'mustache';
+import { doc } from 'prettier';
+import { GroupUserProfile } from './entities/GroupUserProfile';
 
 export interface RollResult {
   name: string;
@@ -26,6 +29,19 @@ export interface RollResult {
   result?: number;
   formula?: string;
   results?: number[];
+}
+
+export interface KoishiSessionLike {
+  userId?: string;
+  username?: string;
+  groupId?: string;
+}
+
+export interface DatabaseUserData {
+  banReason: string;
+  user?: User;
+  group?: Group;
+  profile?: GroupUserProfile;
 }
 
 @Injectable()
@@ -45,15 +61,37 @@ export class AppService {
     rollResult.results = _.range(rollResult.count).map(
       () => Math.floor(Math.random() * rollResult.size) + 1,
     );
-    rollResult.formula = rollResult.results.join('+');
     rollResult.result = _.sum(rollResult.results);
+    rollResult.formula =
+      rollResult.count > 1
+        ? `${rollResult.results.join('+')}=${rollResult.result}`
+        : null;
+  }
+
+  async findOrCreateGroupUserProfile(user: User, group: Group) {
+    const query = this.db
+      .getRepository(GroupUserProfile)
+      .createQueryBuilder('profile')
+      .innerJoinAndSelect('profile.user', 'user')
+      .innerJoinAndSelect('profile.group', 'group')
+      .where('user.id = :userId', { userId: user.id })
+      .andWhere('group.id = :groupId', { groupId: group.id });
+    let profile = await query.getOne();
+    if (!profile) {
+      profile = new GroupUserProfile();
+      profile.user = user;
+      profile.group = group;
+      profile.name = user.name;
+      return await this.db.getRepository(GroupUserProfile).save(profile);
+    }
+    return profile;
   }
 
   async checkJoinGroup(userId: string) {
     const user = await this.botService.findOrCreateUser(userId);
     if (user.checkPermissions(UserPermissions.inviteBot)) {
       return true;
-    } else if (user.isBanned) {
+    } else if (user.banReason) {
       return false;
     }
     return undefined;
@@ -73,7 +111,7 @@ export class AppService {
       .getOne();
   }
 
-  private async getTemplate(key: string, groupId: string) {
+  private async getTemplate(key: string, groupId?: string) {
     let template: TextTemplate;
     if (groupId) {
       template = await this.getTemplateForGroup(key, groupId);
@@ -90,7 +128,7 @@ export class AppService {
     return null;
   }
 
-  private async renderTemplate(key: string, data: any, groupId?: string) {
+  async renderTemplate(key: string, data: any, groupId?: string) {
     const template = await this.getTemplate(key, groupId);
     if (template) {
       return template.render(data);
@@ -100,60 +138,91 @@ export class AppService {
 
   async isUserHasPermissions(userId: string, username: string, perm: number) {
     const user = await this.botService.findOrCreateUser(userId, username);
-    if (user.isBanned) {
+    if (user.banReason) {
       return false;
     }
     return user.checkPermissions(perm);
   }
 
-  private async checkUserAndGroup(
-    userId: string,
-    username: string,
-    groupId: string,
-  ) {
-    const user = await this.botService.findOrCreateUser(userId, username);
-    if (user.isBanned) {
-      return false;
+  private async getDatabaseUserData(
+    userData: KoishiSessionLike,
+  ): Promise<DatabaseUserData> {
+    let user: User = null;
+    if (userData.userId) {
+      user = await this.botService.findOrCreateUser(
+        userData.userId,
+        userData.username,
+      );
+      if (user.banReason) {
+        return { banReason: user.banReason };
+      }
     }
-    const group = await this.botService.findOrCreateGroup(groupId);
-    if (group.isBanned) {
-      return false;
+    let group: Group = null;
+    if (userData.groupId) {
+      group = await this.botService.findOrCreateGroup(userData.groupId);
+      if (group.banReason) {
+        return { banReason: group.banReason };
+      }
     }
-    return true;
+    let profile: GroupUserProfile = null;
+    if (user && group) {
+      profile = await this.findOrCreateGroupUserProfile(user, group);
+      if (profile.banReason) {
+        return { banReason: profile.banReason };
+      }
+    }
+    return { user, group, profile, banReason: null };
   }
 
   async rollDice(
     rollResult: RollResult,
-    userId: string,
-    groupId: string,
+    userData: KoishiSessionLike,
   ): Promise<string> {
-    if (!(await this.checkUserAndGroup(userId, rollResult.name, groupId))) {
-      return await this.renderTemplate('bad_user', {});
+    const { user, group, profile, banReason } = await this.getDatabaseUserData(
+      userData,
+    );
+    if (banReason) {
+      return await this.renderTemplate('bad_user', { reason: banReason });
     }
     if (rollResult.count > this.config.maxDiceCount) {
-      return await this.renderTemplate('too_much_count', rollResult, groupId);
+      return await this.renderTemplate(
+        'too_much_count',
+        rollResult,
+        userData.groupId,
+      );
     }
     if (rollResult.size > this.config.maxDiceSize) {
-      return await this.renderTemplate('too_much_size', rollResult, groupId);
+      return await this.renderTemplate(
+        'too_much_size',
+        rollResult,
+        userData.groupId,
+      );
     }
+    rollResult.name = profile
+      ? profile.getDisplayUsername(userData.username)
+      : user.name;
     AppService.rollProcess(rollResult);
-    return await this.renderTemplate('roll', rollResult, groupId);
+    return await this.renderTemplate('roll', rollResult, userData.groupId);
   }
-  async getGroupTemplate(key: string, groupId: string) {
-    const group = await this.botService.findOrCreateGroup(groupId);
-    if (group.isBanned) {
-      return await this.renderTemplate('bad_user', {});
+  async getGroupTemplate(userData: KoishiSessionLike, key: string) {
+    const { user, group, profile, banReason } = await this.getDatabaseUserData(
+      userData,
+    );
+    if (banReason) {
+      return await this.renderTemplate('bad_user', { reason: banReason });
     }
-    const template = await this.getTemplate(key, groupId);
+    const template = await this.getTemplate(key, userData.groupId);
     if (template) {
       return template.display();
     }
     return `${key} => ${defaultTemplateMap.get(key) || '没有这个模板'}`;
   }
-  async getAllGroupTemplates(groupId: string) {
-    const group = await this.botService.findOrCreateGroup(groupId);
-    if (group.isBanned) {
-      return await this.renderTemplate('bad_user', {});
+  async getAllGroupTemplates(userData: KoishiSessionLike) {
+    const { user, group, profile, banReason } = await this.getDatabaseUserData(
+      userData,
+    );
+    if (banReason) {
+      return await this.renderTemplate('bad_user', { reason: banReason });
     }
     const notSetTemplateNames = Array.from(defaultTemplateMap.keys()).filter(
       (tName) => !group.templates.find((t) => t.key === tName),
@@ -164,15 +233,21 @@ export class AppService {
       '\n',
     )}`;
   }
-  async setGroupTemplate(key: string, groupId: string, content: string) {
-    const group = await this.botService.findOrCreateGroup(groupId);
-    if (group.isBanned) {
-      return await this.renderTemplate('bad_user', {});
+  async setGroupTemplate(
+    userData: KoishiSessionLike,
+    key: string,
+    content: string,
+  ) {
+    const { user, group, profile, banReason } = await this.getDatabaseUserData(
+      userData,
+    );
+    if (banReason) {
+      return await this.renderTemplate('bad_user', { reason: banReason });
     }
     if (!defaultTemplateMap.has(key)) {
       return `模板 ${key} 不存在。`;
     }
-    let template = await this.getTemplateForGroup(key, groupId);
+    let template = await this.getTemplateForGroup(key, userData.groupId);
     if (!template) {
       template = new GroupTemplate();
       template.key = key;
@@ -182,16 +257,192 @@ export class AppService {
     await this.db.getRepository(GroupTemplate).save(template);
     return `成功设置自定义模板: ${template.display()}`;
   }
-  async clearGroupTemplate(key: string, groupId: string) {
-    const group = await this.botService.findOrCreateGroup(groupId);
-    if (group.isBanned) {
-      return await this.renderTemplate('bad_user', {});
+  async clearGroupTemplate(userData: KoishiSessionLike, key: string) {
+    const { user, group, profile, banReason } = await this.getDatabaseUserData(
+      userData,
+    );
+    if (banReason) {
+      return await this.renderTemplate('bad_user', { reason: banReason });
     }
-    const template = await this.getTemplateForGroup(key, groupId);
+    const template = await this.getTemplateForGroup(key, userData.groupId);
     if (!template) {
       return `自定义模板 ${key} 没有设置过。`;
     }
     await this.db.getRepository(GroupTemplate).delete(template);
     return `成功清除模板 ${key}`;
+  }
+  async getGlobalTemplate(userData: KoishiSessionLike, key: string) {
+    const { user, banReason } = await this.getDatabaseUserData(userData);
+    if (banReason) {
+      return await this.renderTemplate('bad_user', { reason: banReason });
+    }
+    const template = await this.getTemplate(key);
+    if (template) {
+      return template.display();
+    }
+    return `${key} => ${defaultTemplateMap.get(key) || '没有这个模板'}`;
+  }
+  async getAllGlobalTemplates(userData: KoishiSessionLike) {
+    const { user, banReason } = await this.getDatabaseUserData(userData);
+    if (banReason) {
+      return await this.renderTemplate('bad_user', { reason: banReason });
+    }
+    const allTemplatesList = Array.from(defaultTemplateMap.keys());
+    const templates = await this.db
+      .getRepository(DefaultTemplate)
+      .find({ where: { key: In(allTemplatesList) } });
+    const notSetTemplateNames = Array.from(defaultTemplateMap.keys()).filter(
+      (tName) => !templates.find((t) => t.key === tName),
+    );
+    return `设置过的默认模板有:\n${templates
+      .map((t) => t.display())
+      .join('\n')}\n\n还没有设置的默认模板有:\n${notSetTemplateNames.join(
+      '\n',
+    )}`;
+  }
+  async setGlobalTemplate(
+    userData: KoishiSessionLike,
+    key: string,
+    content: string,
+  ) {
+    const { user, banReason } = await this.getDatabaseUserData(userData);
+    if (banReason) {
+      return await this.renderTemplate('bad_user', { reason: banReason });
+    }
+    if (!defaultTemplateMap.has(key)) {
+      return `模板 ${key} 不存在。`;
+    }
+    let template = await this.getTemplateForGroup(key, userData.groupId);
+    if (!template) {
+      template = new GroupTemplate();
+      template.key = key;
+    }
+    template.changeContent(content);
+    await this.db.getRepository(DefaultTemplate).save(template);
+    return `成功设置默认模板: ${template.display()}`;
+  }
+  async clearGlobalTemplate(userData: KoishiSessionLike, key: string) {
+    const { user, banReason } = await this.getDatabaseUserData(userData);
+    if (banReason) {
+      return await this.renderTemplate('bad_user', { reason: banReason });
+    }
+    const template = await this.db
+      .getRepository(DefaultTemplate)
+      .findOne({ where: { key } });
+    if (!template) {
+      return `默认模板 ${key} 没有设置过。`;
+    }
+    await this.db.getRepository(DefaultTemplate).delete(template);
+    return `成功清除模板 ${key}`;
+  }
+  async setGroupUsername(userData: KoishiSessionLike, name: string) {
+    const { user, group, profile, banReason } = await this.getDatabaseUserData(
+      userData,
+    );
+    if (banReason) {
+      return await this.renderTemplate('bad_user', { reason: banReason });
+    }
+    if (!name || name.length > 32) {
+      return await this.renderTemplate('bad_name', { name }, userData.groupId);
+    }
+    profile.name = name;
+    await this.db.getRepository(GroupUserProfile).save(profile);
+    return await this.renderTemplate(
+      'group_name_changed',
+      { name },
+      userData.groupId,
+    );
+  }
+  async setGlobalUsername(userData: KoishiSessionLike, name: string) {
+    const { user, banReason } = await this.getDatabaseUserData(userData);
+    if (banReason) {
+      return await this.renderTemplate('bad_user', { reason: banReason });
+    }
+    if (!name || name.length > 32) {
+      return await this.renderTemplate('bad_name', { name });
+    }
+    user.name = name;
+    await this.db.getRepository(User).save(user);
+    return await this.renderTemplate('global_name_changed', { name });
+  }
+  async getGroupUserProfile(userData: KoishiSessionLike, field?: string) {
+    const { user, group, profile, banReason } = await this.getDatabaseUserData(
+      userData,
+    );
+    if (banReason) {
+      return await this.renderTemplate('bad_user', { reason: banReason });
+    }
+    let targetProfiles = [profile];
+    if (field) {
+      targetProfiles = await this.db
+        .getRepository(GroupUserProfile)
+        .createQueryBuilder('profile')
+        .innerJoinAndSelect('profile.user', 'user')
+        .innerJoinAndSelect('profile.group', 'group')
+        .where('group.id = :groupId')
+        .andWhere(
+          new Brackets((qb) => {
+            qb.where('profile.name = :field')
+              .orWhere('user.id = :field')
+              .orWhere('user.name = :field');
+          }),
+        )
+        .setParameters({ groupId: group.id, field })
+        .getMany();
+      if (!targetProfiles) {
+        return await this.renderTemplate(
+          'user_not_found',
+          { field },
+          userData.groupId,
+        );
+      }
+    }
+    return (
+      await Promise.all(
+        targetProfiles.map((targetProfile) =>
+          this.renderTemplate(
+            'group_user_profile',
+            targetProfile.toDscriptionObject(),
+            userData.groupId,
+          ),
+        ),
+      )
+    ).join('\n----------\n');
+  }
+  async getGlobalUserProfile(userData: KoishiSessionLike, field?: string) {
+    const { user, banReason } = await this.getDatabaseUserData(userData);
+    let targetUsers = [user];
+    if (field) {
+      if (banReason) {
+        return await this.renderTemplate('bad_user', { reason: banReason });
+      }
+      targetUsers = await this.db
+        .getRepository(User)
+        .createQueryBuilder('user')
+        .leftJoinAndSelect('user.groupProfiles', 'profile')
+        .leftJoinAndSelect('profile.group', 'group')
+        .where('user.id = :field')
+        .orWhere('user.name = :field')
+        .setParameters({ field })
+        .getMany();
+      if (!targetUsers) {
+        return await this.renderTemplate(
+          'user_not_found',
+          { field },
+          userData.groupId,
+        );
+      }
+    }
+    return (
+      await Promise.all(
+        targetUsers.map((targetUser) =>
+          this.renderTemplate(
+            'global_user_profile',
+            targetUser.toDscriptionObject(),
+            userData.groupId,
+          ),
+        ),
+      )
+    ).join('\n----------\n');
   }
 }

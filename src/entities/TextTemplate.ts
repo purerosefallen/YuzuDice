@@ -9,11 +9,13 @@ export class TextTemplate extends TimeBase {
   content: string;
 
   changeContent(content: string) {
-    this.content = Buffer.from(decode(content), 'utf-8').toString('base64');
+    //this.content = Buffer.from(decode(content), 'utf-8').toString('base64');
+    this.content = decode(content);
   }
 
   getContent() {
-    return Buffer.from(this.content, 'base64').toString('utf-8');
+    //return Buffer.from(this.content, 'base64').toString('utf-8');
+    return this.content;
   }
 
   render(data: any) {
