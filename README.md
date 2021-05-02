@@ -18,6 +18,8 @@
 
 * `DICE_MAX_SIZE` 最大的骰子面数。 默认 1000。
 
+* `NO_KILL_SWITCH` **不推荐。** 关闭被群聊踢出后把群拉黑的功能。
+
 ## 推荐 docker-compose
 
 ```yaml
