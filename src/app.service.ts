@@ -90,16 +90,26 @@ export class AppService {
     return profile;
   }
 
-  async checkJoinGroup(userId: string) {
-    const user = await this.botService.findOrCreateUser(userId);
-    this.log.log(`Bot being invited by ${user.name} ${userId}`);
-    if (user.checkPermissions(UserPermissions.inviteBot)) {
-      this.log.log(`Bot accepted.`);
-      return true;
-    } else if (user.banReason) {
-      this.log.log(`Bot rejected because of banned user: ${user.banReason}.`);
+  async checkJoinGroup(userData: KoishiSessionLike) {
+    this.log.log(
+      `Bot being invited to ${userData.groupId} by ${userData.username} ${userData.userId}`,
+    );
+    const { user, group, profile, banReason } = await this.getDatabaseUserData(
+      userData,
+    );
+    if (banReason) {
+      this.log.log(`Bot rejected because of: ${banReason}.`);
       return false;
     }
+    if (group && group.allowedToJoin) {
+      this.log.log(`Bot accepted for being allowed.`);
+      return true;
+    }
+    if (user.checkPermissions(UserPermissions.inviteBot)) {
+      this.log.log(`Bot accepted for admin.`);
+      return true;
+    }
+
     this.log.log(`Bot ignored.`);
     return undefined;
   }
@@ -451,5 +461,64 @@ export class AppService {
         ),
       )
     ).join('\n----------\n');
+  }
+  async getWelcomeMessage(userData: KoishiSessionLike) {
+    const { user, group, profile, banReason } = await this.getDatabaseUserData(
+      userData,
+    );
+    if (banReason) {
+      return await this.renderTemplate('bad_user', { reason: banReason });
+    }
+    if (group.welcomeMessage) {
+      return await this.renderTemplate(
+        'welcome_message_demo',
+        { message: group.welcomeMessage, demo: group.welcomeUser(user) },
+        userData.groupId,
+      );
+    } else {
+      return await this.renderTemplate(
+        'welcome_message_not_found',
+        {},
+        userData.groupId,
+      );
+    }
+  }
+  async setWelcomeMessage(userData: KoishiSessionLike, message: string) {
+    const { user, group, profile, banReason } = await this.getDatabaseUserData(
+      userData,
+    );
+    if (banReason) {
+      return await this.renderTemplate('bad_user', { reason: banReason });
+    }
+    group.setWelcomeMessage(message);
+    await this.db.getRepository(Group).save(group);
+    return await this.renderTemplate(
+      'welcome_message_set',
+      { message },
+      userData.groupId,
+    );
+  }
+  async handleWelcome(userData: KoishiSessionLike) {
+    const { user, group, profile, banReason } = await this.getDatabaseUserData(
+      userData,
+    );
+    if (banReason) {
+      return null;
+    }
+    return group.welcomeUser(user);
+  }
+  async setGroupAllow(
+    userData: KoishiSessionLike,
+    groupId: string,
+    value: number,
+  ) {
+    const { user, banReason } = await this.getDatabaseUserData(userData);
+    if (banReason) {
+      return await this.renderTemplate('bad_user', { reason: banReason });
+    }
+    const group = await this.botService.findOrCreateGroup(groupId);
+    group.allowedToJoin = value;
+    await this.db.getRepository(Group).save(group);
+    return await this.renderTemplate('group_allow_set', { groupId, value });
   }
 }

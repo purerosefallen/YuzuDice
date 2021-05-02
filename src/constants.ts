@@ -9,6 +9,7 @@ export const UserPermissions = {
   GroupUserWrite: 0x200,
   TemplateWrite: 0x400,
   GroupTemplateWrite: 0x800,
+  GroupWelcomeMessage: 0x1000,
   // others
   inviteBot: 0x10000,
   GroupDismiss: 0x20000,

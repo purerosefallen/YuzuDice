@@ -32,8 +32,7 @@ export class BotController {
     this.bot.plugin(koishiCommonPlugin, {
       onFriendRequest: true,
       onGroupRequest: async (session) => {
-        const userId = session.userId;
-        return await this.appService.checkJoinGroup(userId);
+        return await this.appService.checkJoinGroup(session);
       },
     });
     this.loadBotRouters();
@@ -64,6 +63,17 @@ export class BotController {
       }
       return next();
     });
+    groupCtx.on('group-member-added', async (session) => {
+      const messageToSend = await this.appService.handleWelcome(session);
+      if (messageToSend) {
+        this.botService.log.log(
+          `${session.userId} ${session.username} joined group ${session.groupId} => ${messageToSend}`,
+        );
+        await session.send(
+          `${segment('at', { id: session.userId })} ${messageToSend}`,
+        );
+      }
+    });
     globalCtx
       .command('rolldice', '投掷骰子')
       .option('count', '-c <count:posint> 骰子数量', { fallback: 1 })
@@ -84,28 +94,52 @@ export class BotController {
         return await this.appService.rollDice(rollResult, session);
       });
     const groupCommand = groupCtx.command('group', '群内指令');
-    groupCommand
-      .subcommand('.dismiss', '退群')
-      .usage('群内数据会保留。')
-      .alias('dismiss')
+    groupCtx
+      .command('dismiss', '退群，请使用这个命令，而不是踢我出去。')
+      .usage('只有管理员可以操作。群内数据会保留。')
       .action(async (argv) => {
         const session = argv.session;
+        return await this.processDismissCommand(session);
+      });
+    groupCommand
+      .subcommand('.dismiss', '退群')
+      .usage('只有管理员可以操作。群内数据会保留。')
+      .action(async (argv) => {
+        const session = argv.session;
+        return await this.processDismissCommand(session);
+      });
+    groupCommand
+      .subcommand('.welcome [message:text]', '设置群欢迎消息')
+      .usage(
+        '只有管理员可以操作。新人加入的时候会自动发送。允许使用模板。设置为 null 则清除。',
+      )
+      .alias('welcome')
+      .action(async (argv, message) => {
+        const session = argv.session;
+        if (!message || message === 'get') {
+          const ret = await this.appService.getWelcomeMessage(session);
+          return `${segment('at', {
+            id: session.userId,
+          })} ${ret}`;
+        }
         if (
           !(await this.checkGroupAdminOrPermission(
             session,
-            UserPermissions.GroupDismiss,
+            UserPermissions.GroupTemplateRead,
           ))
         ) {
           return `${segment('at', {
             id: session.userId,
           })} ${await this.appService.renderTemplate(
             'permission_denied',
-            { action: '退群' },
+            { action: '设置群欢迎消息' },
             session.groupId,
           )}`;
         }
-        await this.groupDismiss(session.groupId);
-        return undefined;
+        const ret = await this.appService.setWelcomeMessage(session, message);
+        return `${segment('at', {
+          id: session.userId,
+        })} ${ret}`;
       });
     const groupTemplateCommand = groupCommand
       .subcommand('.template', '获取本群自定义模板')
@@ -216,7 +250,7 @@ export class BotController {
         return `${segment('at', { id: session.userId })} ${ret}`;
       });
     const groupUserCommand = groupCommand
-      .subcommand('.user [field:text]', '查看群内用户信息')
+      .subcommand('.user [field:string]', '查看群内用户信息')
       .usage('带参数查看其他人的用户信息，但是只有管理员可以用。')
       .example(
         '.user 查看自己的用户信息。.user Nanahira 查看 Nanahira 的用户信息。',
@@ -255,7 +289,7 @@ export class BotController {
         return `${segment('at', { id: session.userId })} ${ret}`;
       });
     const userCommand = globalCtx
-      .command('account [field:text]', '查看用户信息')
+      .command('account [field:string]', '查看用户信息')
       .usage('带参数查看其他人的用户信息，但是只有管理员可以用。')
       .example(
         '.account 查看自己的用户信息。.account Nanahira 查看 Nanahira 的用户信息。',
@@ -324,6 +358,34 @@ export class BotController {
           },
           session.groupId,
         );
+      });
+    adminCommand
+      .subcommand('.join <groupId:string>', '设置允许加入指定群')
+      .usage('并不会主动加群，但是允许被邀请的时候加群。')
+      .option('value', '-v <value:integer>', { fallback: 1 })
+      .option('value', '--disable', { value: 0 })
+      .action(async (argv, groupId) => {
+        const session = argv.session;
+        const value = argv.options.value;
+        if (
+          !(await this.checkUserPermission(session, UserPermissions.inviteBot))
+        ) {
+          return `${segment('at', {
+            id: session.userId,
+          })} ${await this.appService.renderTemplate(
+            'permission_denied',
+            { action: '设置允许加入指定群' },
+            session.groupId,
+          )}`;
+        }
+        if (!groupId) {
+          return await this.appService.renderTemplate(
+            'bad_params',
+            {},
+            session.groupId,
+          );
+        }
+        return await this.appService.setGroupAllow(session, groupId, value);
       });
     const adminTemplateCommand = adminCommand
       .subcommand('.template', '获取默认模板')
@@ -490,6 +552,42 @@ export class BotController {
   }
   getBot() {
     return (this.bot.bots[0] as unknown) as CQBot;
+  }
+  async processDismissCommand(
+    session: Session<
+      never,
+      never,
+      'onebot',
+      keyof Session.Events,
+      | keyof Session.MessageType
+      | 'role'
+      | 'ban'
+      | keyof Session.GroupMemberChangeType
+      | 'poke'
+      | 'lucky-king'
+      | 'honor'
+    >,
+  ) {
+    if (
+      !(await this.checkUserPermission(session, UserPermissions.GroupDismiss))
+    ) {
+      if (
+        !(await this.checkGroupAdminOrPermission(
+          session,
+          UserPermissions.GroupDismiss,
+        ))
+      ) {
+        return `${segment('at', {
+          id: session.userId,
+        })} ${await this.appService.renderTemplate(
+          'permission_denied',
+          { action: '退群' },
+          session.groupId,
+        )}`;
+      }
+      await this.groupDismiss(session.groupId);
+      return undefined;
+    }
   }
   async groupDismiss(groupId: string) {
     try {

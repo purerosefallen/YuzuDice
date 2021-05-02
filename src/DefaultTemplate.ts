@@ -45,3 +45,15 @@ defaultTemplateMap.set('bad_params', BadParamsText);
 
 export const AdminQuitGroup = `已退出群 {{groupId}}。`;
 defaultTemplateMap.set('admin_quit_group', AdminQuitGroup);
+
+export const WelcomeMessageDemo = `本群的欢迎信息是:\n{{&message}}\n\n示例:\n{{&demo}}`;
+defaultTemplateMap.set('welcome_message_demo', WelcomeMessageDemo);
+
+export const WelcomeMessageNotFound = `本群没有设置欢迎信息。\n使用 .group.welcome <信息> 来设置一个。`;
+defaultTemplateMap.set('welcome_message_not_found', WelcomeMessageNotFound);
+
+export const WelcomeMessageSet = `已经设置群欢迎信息为 {{&message}}`;
+defaultTemplateMap.set('welcome_message_set', WelcomeMessageSet);
+
+export const GroupAllowSet = `已经设置群 {{groupId}} 可加入状态为 {{value}}。`;
+defaultTemplateMap.set('group_allow_set', GroupAllowSet);
