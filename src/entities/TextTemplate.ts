@@ -1,7 +1,7 @@
 import { TimeBase } from './TimeBase';
 import { Column, PrimaryGeneratedColumn } from 'typeorm';
-import Mustache from 'mustache';
 import { decode } from 'he';
+import { Utility } from '../utility';
 
 export class TextTemplate extends TimeBase {
   key: string; // column differs
@@ -19,7 +19,7 @@ export class TextTemplate extends TimeBase {
   }
 
   render(data: any) {
-    return Mustache.render(this.getContent(), data);
+    return Utility.render(this.getContent(), data);
   }
 
   display() {

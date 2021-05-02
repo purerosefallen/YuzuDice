@@ -4,7 +4,7 @@ import { GroupTemplate } from './GroupTemplate';
 import { GroupUserProfile } from './GroupUserProfile';
 import he from 'he';
 import { User } from './User';
-import Mustache from 'mustache';
+import { Utility } from '../utility';
 
 @Entity()
 export class Group extends QQIDBase {
@@ -32,7 +32,7 @@ export class Group extends QQIDBase {
     if (!this.welcomeMessage) {
       return null;
     }
-    return Mustache.render(this.welcomeMessage, user);
+    return Utility.render(this.welcomeMessage, user);
   }
 
   renderText(key: string, data: any) {
