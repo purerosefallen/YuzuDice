@@ -39,7 +39,7 @@ export class BotService {
   }
   async findOrCreateGroup(id: string) {
     const repo = this.db.getRepository(Group);
-    let ent = await repo.findOne({ where: { id } });
+    let ent = await repo.findOne({ where: { id }, relations: ['templates'] });
     if (ent) {
       return ent;
     }

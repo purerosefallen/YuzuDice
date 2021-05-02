@@ -9,5 +9,4 @@ export const UserPermissions = {
   TemplateWrite: 0x400,
   // others
   inviteBot: 0x10000,
-  GroupCheck: 0x20000,
 };
