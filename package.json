@@ -30,6 +30,7 @@
     "koishi-adapter-onebot": "^3.0.8",
     "koishi-plugin-common": "^4.2.4",
     "lodash": "^4.17.21",
+    "moment": "^2.29.1",
     "mustache": "^4.2.0",
     "mysql": "^2.18.1",
     "reflect-metadata": "^0.1.13",

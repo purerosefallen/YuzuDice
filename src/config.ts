@@ -26,11 +26,13 @@ export function typeormConfig(): TypeOrmModuleOptions {
 export interface DiceConfig {
   maxDiceCount: number;
   maxDiceSize: number;
+  killSwitch: boolean;
 }
 
 export function diceConfig(): DiceConfig {
   return {
     maxDiceCount: parseInt(process.env.DICE_MAX_COUNT) || 1000,
     maxDiceSize: parseInt(process.env.DICE_MAX_SIZE) || 1000,
+    killSwitch: !process.env.NO_KILL_SWITCH,
   };
 }

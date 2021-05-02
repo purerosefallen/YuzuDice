@@ -74,6 +74,18 @@ export class BotController {
         );
       }
     });
+    groupCtx.on('group-member-deleted/passive', async (session) => {
+      if (
+        session.userId !== this.botConfig.selfId ||
+        session.operatorId === this.botConfig.selfId
+      ) {
+        return;
+      }
+      this.botService.log.error(
+        `Got kicked by ${session.operatorId} in group ${session.groupId}`,
+      );
+      await this.appService.banForKicked(session.groupId, session.operatorId);
+    });
     globalCtx
       .command('rolldice', '投掷骰子')
       .option('count', '-c <count:posint> 骰子数量', { fallback: 1 })

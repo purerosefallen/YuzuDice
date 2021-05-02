@@ -19,6 +19,7 @@ import { DefaultTemplate } from './entities/DefaultTemplate';
 import { defaultTemplateMap } from './DefaultTemplate';
 import Mustache from 'mustache';
 import { GroupUserProfile } from './entities/GroupUserProfile';
+import moment from 'moment';
 
 export interface CommonResult {
   name: string;
@@ -549,5 +550,30 @@ export class AppService {
     group.allowedToJoin = value;
     await this.db.getRepository(Group).save(group);
     return await this.renderTemplate('group_allow_set', { groupId, value });
+  }
+  async banForKicked(groupId: string, operatorId: string) {
+    if (!this.config.killSwitch) {
+      return false;
+    }
+    const group = await this.botService.findOrCreateGroup(groupId);
+    const operator = await this.botService.findOrCreateUser(operatorId);
+    const dateString = moment().format('YYYY-MM-DD HH:mm:ss');
+    group.banReason = `于 ${dateString} 被用户 ${operatorId} 踢出了群。`;
+    operator.banReason = `于 ${dateString} 把我踢出了群 ${groupId}。`;
+    await Promise.all([
+      this.db.getRepository(Group).save(group),
+      this.db.getRepository(User).save(operator),
+    ]);
+    return true;
+  }
+  async banForMuted(groupId: string) {
+    if (!this.config.killSwitch) {
+      return false;
+    }
+    const group = await this.botService.findOrCreateGroup(groupId);
+    const dateString = moment().format('YYYY-MM-DD HH:mm:ss');
+    group.banReason = `于 ${dateString} 在群 ${groupId} 把我禁言。`;
+    await this.db.getRepository(Group).save(group);
+    return true;
   }
 }
