@@ -34,6 +34,11 @@ export interface RollResult extends CommonResult {
   results?: number[];
 }
 
+export interface RcResult extends CommonResult {
+  maximumValue: number;
+  success?: boolean;
+}
+
 export interface KoishiSessionLike {
   userId?: string;
   username?: string;
@@ -220,6 +225,31 @@ export class AppService {
       : user.name;
     AppService.rollProcess(rollResult);
     return await this.renderTemplate('roll', rollResult, userData.groupId);
+  }
+
+  async rcCheck(
+    userData: KoishiSessionLike,
+    maximumValue: number,
+    reason: string,
+  ): Promise<string> {
+    const { user, group, profile, banReason } = await this.getDatabaseUserData(
+      userData,
+    );
+    if (banReason) {
+      return await this.renderTemplate('bad_user', { reason: banReason });
+    }
+    if (!maximumValue || maximumValue < 0 || maximumValue > 100) {
+      return await this.renderTemplate('bad_params', {}, userData.groupId);
+    }
+    const result = Math.floor(Math.random() * 101);
+    const rcResult: RcResult = {
+      name: profile ? profile.getDisplayUsername(userData.username) : user.name,
+      reason,
+      maximumValue,
+      result,
+      success: result <= maximumValue,
+    };
+    return await this.renderTemplate('rc', rcResult, userData.groupId);
   }
   async getGroupTemplate(userData: KoishiSessionLike, key: string) {
     const { user, group, profile, banReason } = await this.getDatabaseUserData(

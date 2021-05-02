@@ -79,7 +79,7 @@ export class BotController {
       .option('count', '-c <count:posint> 骰子数量', { fallback: 1 })
       .option('size', '-s <count:posint> 骰子面数', { fallback: 6 })
       .option('reason', '-r <reason:text> 骰子说明')
-      .alias('rd', 'roll')
+      .alias('rd', 'roll', 'r')
       .usage('也支持 .rd<size> 和 .r<count>d<size> [reason] 这样的传统语法。')
       .example('.rolldice -c 2 -s 6 -r "行动判定"')
       .action(async (argv, args) => {
@@ -92,6 +92,15 @@ export class BotController {
           ...argv.options,
         };
         return await this.appService.rollDice(rollResult, session);
+      });
+    globalCtx
+      .command('rc <maximum:posint> [reason:text]', '检点')
+      .alias('ra')
+      .usage('进行一次检点。结果小于预设数值则成功。')
+      .example('.rc 50 占卜')
+      .action(async (argv, maximum, reason) => {
+        const session = argv.session;
+        return await this.appService.rcCheck(session, maximum, reason);
       });
     const groupCommand = groupCtx.command('group', '群内指令');
     groupCtx

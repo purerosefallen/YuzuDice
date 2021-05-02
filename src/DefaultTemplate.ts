@@ -4,6 +4,10 @@ export const DefaultRollText =
   '{{&name}} {{#reason}}因为 {{&reason}} 而{{/reason}}投掷了 {{count}} 个 {{size}} 面骰子，投掷出了 {{result}} 点。{{#formula}}\n{{&formula}}{{/formula}}';
 defaultTemplateMap.set('roll', DefaultRollText);
 
+export const DefaultRcText =
+  '{{&name}} {{#reason}}因为 {{&reason}} 而{{/reason}}检点的结果: {{&maximumValue}}/100={{&result}} {{#success}}成功。恭喜！{{/success}}{{^success}}失败。差一点点了，再接再厉！{{/success}}';
+defaultTemplateMap.set('rc', DefaultRcText);
+
 export const TooMuchCountText =
   '{{&name}} {{#reason}}因为 {{&reason}} 而{{/reason}}投掷了 {{count}} 个 {{size}} 面骰子。\n骰子滚落了一地，找不到了。';
 defaultTemplateMap.set('too_much_count', TooMuchCountText);
