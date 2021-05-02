@@ -1,17 +1,19 @@
 import { Controller } from '@nestjs/common';
 import { AppService, RollResult } from '../app.service';
 import { BotService } from './bot.service';
-import { App, Session, segment } from 'koishi';
+import { App, Session, segment, AppConfig } from 'koishi';
 import * as koishiCommonPlugin from 'koishi-plugin-common';
 import * as adapter from 'koishi-adapter-onebot';
 import { defaultTemplateMap } from '../DefaultTemplate';
 import { UserPermissions } from '../constants';
 import { User } from '../entities/User';
+import { CQBot } from 'koishi-adapter-onebot';
 
 const __ = typeof adapter; // just for import
 @Controller('_bot')
 export class BotController {
   bot: App;
+  botConfig: AppConfig;
   constructor(
     private readonly appService: AppService,
     private readonly botService: BotService,
@@ -19,13 +21,14 @@ export class BotController {
     this.initializeBot();
   }
   async initializeBot() {
-    this.bot = new App({
+    this.botConfig = {
       type: 'onebot:ws',
       selfId: process.env.CQ_ID,
       server: process.env.CQ_SERVER,
       token: process.env.CQ_TOKEN,
       prefix: process.env.CQ_PREFIX || '.',
-    });
+    };
+    this.bot = new App(this.botConfig);
     this.bot.plugin(koishiCommonPlugin, {
       onFriendRequest: true,
       onGroupRequest: async (session) => {
@@ -81,6 +84,29 @@ export class BotController {
         return await this.appService.rollDice(rollResult, session);
       });
     const groupCommand = groupCtx.command('group', '群内指令');
+    groupCommand
+      .subcommand('.dismiss', '退群')
+      .usage('群内数据会保留。')
+      .alias('dismiss')
+      .action(async (argv) => {
+        const session = argv.session;
+        if (
+          !(await this.checkGroupAdminOrPermission(
+            session,
+            UserPermissions.GroupDismiss,
+          ))
+        ) {
+          return `${segment('at', {
+            id: session.userId,
+          })} ${await this.appService.renderTemplate(
+            'permission_denied',
+            { action: '退群' },
+            session.groupId,
+          )}`;
+        }
+        await this.groupDismiss(session.groupId);
+        return undefined;
+      });
     const groupTemplateCommand = groupCommand
       .subcommand('.template', '获取本群自定义模板')
       .usage(
@@ -218,6 +244,7 @@ export class BotController {
     groupUserCommand
       .subcommand('.name <name:string>', '修改群内用户昵称')
       .example('.group.user.name Nanahira')
+      .alias('nn')
       .action(async (argv, name) => {
         const session = argv.session;
         if (!name) {
@@ -263,6 +290,41 @@ export class BotController {
     const adminCommand = globalCtx
       .command('admin', '管理接口')
       .usage('这里的命令只有管理员可以用。');
+    adminCommand
+      .subcommand('.dismiss <groupId:string>', '退指定群')
+      .usage('群内数据会保留。')
+      .action(async (argv, groupId) => {
+        const session = argv.session;
+        if (
+          !(await this.checkUserPermission(
+            session,
+            UserPermissions.GroupDismiss,
+          ))
+        ) {
+          return `${segment('at', {
+            id: session.userId,
+          })} ${await this.appService.renderTemplate(
+            'permission_denied',
+            { action: '退群' },
+            session.groupId,
+          )}`;
+        }
+        if (!groupId) {
+          return await this.appService.renderTemplate(
+            'bad_params',
+            {},
+            session.groupId,
+          );
+        }
+        await this.groupDismiss(groupId);
+        return await this.appService.renderTemplate(
+          'admin_quit_group',
+          {
+            groupId,
+          },
+          session.groupId,
+        );
+      });
     const adminTemplateCommand = adminCommand
       .subcommand('.template', '获取默认模板')
       .usage(
@@ -420,10 +482,25 @@ export class BotController {
       | 'honor'
     >,
   ) {
-    const { role } = await session.bot.$getGroupMemberInfo(
+    const { role } = await this.getBot().$getGroupMemberInfo(
       session.groupId,
       session.userId,
     );
     return role === 'owner' || role === 'admin';
+  }
+  getBot() {
+    return (this.bot.bots[0] as unknown) as CQBot;
+  }
+  async groupDismiss(groupId: string) {
+    try {
+      await this.getBot().$setGroupLeave(groupId, false);
+      return null;
+    } catch (e) {
+      const errorMessage = e.toString();
+      this.botService.log.error(
+        `Quit group ${groupId} failed: ${errorMessage}`,
+      );
+      return errorMessage;
+    }
   }
 }

@@ -42,3 +42,6 @@ defaultTemplateMap.set('permission_denied', PermissionDeniedText);
 
 export const BadParamsText = `参数不正确。`;
 defaultTemplateMap.set('bad_params', BadParamsText);
+
+export const AdminQuitGroup = `已退出群 {{groupId}}。`;
+defaultTemplateMap.set('admin_quit_group', AdminQuitGroup);

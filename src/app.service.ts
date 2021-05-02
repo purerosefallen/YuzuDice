@@ -21,12 +21,15 @@ import Mustache from 'mustache';
 import { doc } from 'prettier';
 import { GroupUserProfile } from './entities/GroupUserProfile';
 
-export interface RollResult {
+export interface CommonResult {
   name: string;
   reason?: string;
+  result?: number;
+}
+
+export interface RollResult extends CommonResult {
   count: number;
   size: number;
-  result?: number;
   formula?: string;
   results?: number[];
 }
@@ -89,11 +92,15 @@ export class AppService {
 
   async checkJoinGroup(userId: string) {
     const user = await this.botService.findOrCreateUser(userId);
+    this.log.log(`Bot being invited by ${user.name} ${userId}`);
     if (user.checkPermissions(UserPermissions.inviteBot)) {
+      this.log.log(`Bot accepted.`);
       return true;
     } else if (user.banReason) {
+      this.log.log(`Bot rejected because of banned user: ${user.banReason}.`);
       return false;
     }
+    this.log.log(`Bot ignored.`);
     return undefined;
   }
 
@@ -227,11 +234,11 @@ export class AppService {
     const notSetTemplateNames = Array.from(defaultTemplateMap.keys()).filter(
       (tName) => !group.templates.find((t) => t.key === tName),
     );
-    return `本群设置过的自定义模板有:\n${group.templates
-      .map((t) => t.display())
-      .join('\n')}\n\n还没有设置的自定义模板有:\n${notSetTemplateNames.join(
-      '\n',
-    )}`;
+    return `本群设置过的自定义模板有:\n${
+      group.templates
+        ? group.templates.map((t) => t.display()).join('\n')
+        : '无'
+    }\n\n还没有设置的自定义模板有:\n${notSetTemplateNames.join('\n')}`;
   }
   async setGroupTemplate(
     userData: KoishiSessionLike,
@@ -438,7 +445,7 @@ export class AppService {
         targetUsers.map((targetUser) =>
           this.renderTemplate(
             'global_user_profile',
-            targetUser.toDscriptionObject(),
+            targetUser.toDescriptionObject(),
             userData.groupId,
           ),
         ),

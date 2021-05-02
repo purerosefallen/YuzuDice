@@ -18,7 +18,7 @@ export class User extends QQIDBase {
     return !!(this.permissions & permissionNeeded);
   }
 
-  toDscriptionObject() {
+  toDescriptionObject() {
     return this;
   }
 }
