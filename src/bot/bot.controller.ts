@@ -74,11 +74,8 @@ export class BotController {
         );
       }
     });
-    groupCtx.on('group-member-deleted/passive', async (session) => {
-      if (
-        session.userId !== this.botConfig.selfId ||
-        session.operatorId === this.botConfig.selfId
-      ) {
+    groupCtx.on('group-deleted/passive', async (session) => {
+      if (session.operatorId === this.botConfig.selfId) {
         return;
       }
       this.botService.log.error(
